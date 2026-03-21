@@ -1,6 +1,8 @@
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync } from "node:fs";
 import { join, resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { execSync } from "node:child_process";
+import { createInterface } from "node:readline";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const TEMPLATES_DIR = resolve(__dirname, "../../templates");
@@ -74,4 +76,105 @@ export function scaffoldFiles(repoRoot: string, options: ScaffoldOptions): Scaff
   }
 
   return { created, skipped };
+}
+
+export function findRepoRoot(): string {
+  let dir = process.cwd();
+  while (true) {
+    if (existsSync(join(dir, ".git"))) {
+      return dir;
+    }
+    const parent = dirname(dir);
+    if (parent === dir) {
+      throw new Error("Not inside a git repository. Run this command from within a repo.");
+    }
+    dir = parent;
+  }
+}
+
+export function checkGhAvailable(): string {
+  try {
+    const output = execSync("gh --version", { encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] });
+    const match = output.match(/gh version [\d.]+/);
+    return match ? match[0] : output.trim().split("\n")[0];
+  } catch {
+    throw new Error("GitHub CLI (gh) not found. Install it from https://cli.github.com/");
+  }
+}
+
+export function resolveClaudeActionSha(): string {
+  const tag = execSync(
+    "gh api repos/anthropics/claude-code-action/releases/latest --jq '.tag_name'",
+    { encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] }
+  ).trim();
+
+  const refOutput = execSync(
+    `gh api repos/anthropics/claude-code-action/git/ref/tags/${tag} --jq '.object.type,.object.sha'`,
+    { encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] }
+  ).trim();
+
+  const [objectType, sha] = refOutput.split("\n");
+
+  if (objectType === "tag") {
+    // Annotated tag — follow to the underlying commit
+    const commitSha = execSync(
+      `gh api repos/anthropics/claude-code-action/git/tags/${sha} --jq '.object.sha'`,
+      { encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] }
+    ).trim();
+    return commitSha;
+  }
+
+  return sha;
+}
+
+export async function detectCiWorkflowName(repoRoot: string): Promise<string> {
+  const workflowsDir = join(repoRoot, ".github", "workflows");
+  if (!existsSync(workflowsDir)) {
+    console.warn("  No .github/workflows directory found. Defaulting CI workflow name to \"CI\".");
+    return "CI";
+  }
+
+  const files = readdirSync(workflowsDir).filter(
+    (f) => f.endsWith(".yml") || f.endsWith(".yaml")
+  );
+
+  const workflows: { file: string; name: string }[] = [];
+  for (const file of files) {
+    const content = readFileSync(join(workflowsDir, file), "utf-8");
+    const match = content.match(/^name:\s*['"]?(.+?)['"]?\s*$/m);
+    if (match) {
+      workflows.push({ file, name: match[1] });
+    }
+  }
+
+  if (workflows.length === 0) {
+    console.warn("  No named workflows found. Defaulting CI workflow name to \"CI\".");
+    return "CI";
+  }
+
+  if (workflows.length === 1) {
+    return workflows[0].name;
+  }
+
+  // Multiple workflows — ask the user to pick
+  console.log("\nMultiple workflows detected:");
+  for (let i = 0; i < workflows.length; i++) {
+    console.log(`  ${i + 1}. ${workflows[i].name} (${workflows[i].file})`);
+  }
+
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  const answer = await new Promise<string>((resolve) => {
+    rl.question("Which workflow is your CI? [number]: ", (ans) => {
+      rl.close();
+      resolve(ans.trim());
+    });
+  });
+
+  const idx = parseInt(answer, 10) - 1;
+  if (idx >= 0 && idx < workflows.length) {
+    return workflows[idx].name;
+  }
+
+  console.warn(`  Invalid selection "${answer}". Using first workflow.`);
+  return workflows[0].name;
 }
