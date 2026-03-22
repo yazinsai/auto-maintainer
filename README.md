@@ -1,137 +1,145 @@
 # auto-maintainer
 
-Your repo gets issues, PRs, and bug reports. You triage them, review code, merge the good stuff, close the noise, and cut releases. It's important work — but most of it follows rules you could write down.
+Write your repo's rules in plain Markdown. We give you the GitHub Actions to enforce them.
 
-**auto-maintainer** lets you write those rules down, then runs them for you. It drops four GitHub Actions workflows into your repo that handle triage, code review, bug fixes, and releases automatically — all powered by Claude.
+auto-maintainer triages issues, reviews PRs, fixes bugs, merges code, and cuts releases — autonomously. It reads a policy file you write, follows your rules, and only asks for human input when something is genuinely ambiguous or high-risk.
 
-You stay in control through a plain-English policy file that lives in your repo. The bot reads it on every run.
+## The idea
 
-## How it works
+Most repo maintenance is rule-following. You probably already have rules — they're just in your head:
 
-```
-  Issue opened          PR opened           CI passes            Merge to main
-       │                    │                   │                     │
-       ▼                    ▼                   ▼                     ▼
-  ┌─────────┐         ┌─────────┐         ┌───────────┐       ┌─────────────┐
-  │ Triage  │         │ Triage  │         │   Gate    │       │  Release    │
-  │ Agent   │         │ Agent   │         │  Runner   │       │  Runner     │
-  │         │         │         │         │           │       │             │
-  │ Labels, │         │ Reviews │         │ Checks    │       │ Bumps       │
-  │ sorts,  │         │ code,   │         │ gates,    │       │ version,    │
-  │ closes  │         │ labels  │         │ merges    │       │ tags,       │
-  │ dupes   │         │         │         │           │       │ releases    │
-  └────┬────┘         └─────────┘         └───────────┘       └─────────────┘
-       │
-       ▼ (if risk:low or risk:medium)
-  ┌──────────┐
-  │ Implement│
-  │ Agent    │
-  │          │
-  │ Writes   │
-  │ the fix, │
-  │ opens PR │
-  └──────────┘
-```
+> "Close duplicates. Ask for repro steps on bug reports. Don't merge if CI is red. Doc-only changes are low-risk. Don't touch auth without a human review."
 
-**Triage Agent** reads every new issue and PR. It classifies them (bug? feature? docs?), assesses risk, checks for duplicates, and decides what to do — all based on your policy file. Read-only; can't touch your code.
-
-**Implementation Agent** picks up issues marked `state:planned` and actually writes the fix. Creates a branch, makes changes, opens a PR. Only runs on low/medium risk items. High-risk work stays for humans.
-
-**Gate Runner** watches for PRs marked ready to merge. Checks that CI passes, no one's blocking, and all labels are in order. If everything looks good, it merges. No AI involved — pure logic.
-
-**Release Runner** fires after merges. Looks at which PRs landed since the last tag, reads their `release:*` labels, and cuts the appropriate semver release. Also pure logic.
+auto-maintainer lets you write those rules in a Markdown file, then handles the rest. You define what matters. It does the work.
 
 ## Get started
-
-Run this inside any git repo:
 
 ```bash
 npx auto-maintainer init
 ```
 
-The CLI will:
-1. Drop four workflow files into `.github/workflows/`
-2. Create a starter policy file at `.github/repo-policy.md`
-3. Set up 26 labels across 5 namespaces
-4. Walk you through authentication setup
+That's it. Run this inside any git repo. The CLI sets up four workflow files, creates your starter policy, and syncs labels. It walks you through connecting Claude and setting up a GitHub App.
 
-Then edit `.github/repo-policy.md` to match your project, commit, push, and you're live.
+Then open `.github/repo-policy.md`, write your rules, commit, and push.
 
-### What you'll need
+## Writing your rules
 
-**A GitHub App** (or PAT) for workflow chaining — when the Triage Agent labels an issue, that label needs to trigger the Implementation Agent. GitHub blocks this with the default token, so you need an App. The CLI walks you through it.
-
-**Claude access** — either:
-- A Claude subscription (Pro, Max, or Team) via `claude setup-ci`
-- An Anthropic API key
-
-## Your policy file
-
-This is the only file you need to write. It's plain Markdown at `.github/repo-policy.md`:
+Your policy file is plain Markdown at `.github/repo-policy.md`. Write it however makes sense for your project. Here's an example:
 
 ```markdown
 # Product Guardrails
-- Privacy by default
-- Simplicity over features
+- Privacy by default — nothing leaves the user's machine without consent
+- Simplicity over features — if it adds complexity, it better be worth it
+- This is a macOS app. Don't accept cross-platform work.
 
 # Risk Classification
 ## Always High Risk
-- Changes to authentication
+- Changes to authentication or authorization
 - Database migrations
+- Anything touching the release pipeline
 
 ## Always Low Risk
 - Documentation-only changes
 - Test-only changes
+- Fixing typos
 
 # Decision Rules
 ## Bugs
-- Fix if reproducible or obvious from code
-- Close as duplicate if already tracked
+- Fix if reproducible or obvious from reading the code
+- Close as duplicate if an existing issue already covers it
+- Ask for reproduction steps if the report is vague
 
 ## Features
 - Accept if it benefits most users
-- Decline if complexity is disproportionate
+- Decline if the complexity is disproportionate to the value
+- If it's ambiguous, ask a human
+
+## External PRs
+- The idea matters more than the exact code
+- It's fine to reimplement a good idea from scratch
 
 # Repo-Specific Rules
-- Treat changes to billing as risk:high
+- Treat changes to the billing module as high risk
+- Never auto-merge changes to .github/workflows/
 ```
 
-The agents read this on every run. Change the policy, and behavior changes on the next trigger. No workflow edits needed.
+That's it. No YAML schemas, no config DSLs, no learning a new syntax. Just write what you'd tell a new team member.
+
+The bot reads this file on every run. Change your rules, and behavior changes on the next trigger.
+
+## What it actually does
+
+auto-maintainer installs four GitHub Actions workflows. Together, they handle the full lifecycle:
+
+**Triage** — When an issue or PR comes in, the bot reads it, classifies it (bug? feature? docs?), assesses the risk, checks for duplicates, and decides what to do next. For PRs, it reviews the code. All based on your rules.
+
+**Implement** — For issues it can handle (low and medium risk), it writes the fix, creates a branch, and opens a PR. If the PR gets review feedback, it revises. It keeps going until the fix is right.
+
+**Merge** — When a PR is ready (CI green, review approved, labels correct), it merges automatically. No human needed. It uses your repo's branch protection rules — it doesn't bypass anything, it works within them.
+
+**Release** — After merges, it checks what landed, determines the right version bump from labels, and cuts a release. Patch and minor releases happen automatically. Major releases wait for a human.
+
+### When it asks for help
+
+The bot handles most things on its own, but it escalates to you when:
+
+- Something is **high risk** (you define what that means in your policy)
+- A **major release** is ready to ship
+- The issue or PR is **ambiguous** — two valid interpretations, unclear requirements
+- It detects something **suspicious** — prompt injection, social engineering, policy-bypass attempts
+
+When this happens, it labels the item `state:awaiting-human` and waits. You decide, change the label, and it picks back up.
+
+## Your own CI checks
+
+auto-maintainer works with whatever CI you already have. Your tests, your linters, your smoke tests — they all run as normal. The Gate Runner won't merge anything until your CI passes.
+
+If you want to add checks specifically for auto-maintainer, just add them as regular GitHub Actions workflows. They'll be picked up automatically through branch protection.
 
 ## Labels
 
-auto-maintainer uses a fixed set of 26 labels across 5 namespaces. Every issue and PR gets exactly one label from each namespace. The Triage Agent applies and maintains them automatically.
+The bot uses 26 labels across 5 namespaces to track state. You don't need to manage them — the bot applies and maintains them. But they're useful to understand:
 
-| Namespace | Labels |
-|-----------|--------|
-| **kind** | `bug` `feature` `ux` `docs` `housekeeping` |
-| **state** | `new` `needs-info` `needs-repro` `planned` `in-progress` `awaiting-human` `ready-to-merge` `done` |
-| **risk** | `low` `medium` `high` |
-| **resolution** | `none` `merged` `duplicate` `already-fixed` `declined` `out-of-scope` |
-| **release** | `none` `patch` `minor` `major` |
+| Namespace | What it tracks | Labels |
+|-----------|---------------|--------|
+| **kind** | What type of work | `bug` `feature` `ux` `docs` `housekeeping` |
+| **state** | Where it is in the workflow | `new` `needs-info` `needs-repro` `planned` `in-progress` `awaiting-human` `ready-to-merge` `done` |
+| **risk** | How dangerous the change is | `low` `medium` `high` |
+| **resolution** | How it ended | `none` `merged` `duplicate` `already-fixed` `declined` `out-of-scope` |
+| **release** | Version impact | `none` `patch` `minor` `major` |
 
-`risk:high` and `release:major` always require human approval. Everything else can be handled autonomously.
+## Setup details
 
-## CLI
+### What you'll need
+
+1. **A GitHub App** — workflow chaining requires it (when the bot labels an issue, that needs to trigger the next workflow). The CLI walks you through creating one.
+
+2. **Claude access** — pick one:
+   - **Claude subscription** (Pro, Max, or Team) — run `claude setup-ci` during init
+   - **Anthropic API key** — paste it when prompted
+
+### CLI commands
 
 ```bash
-# Set up everything
+# Full setup
 npx auto-maintainer init
 
-# Sync labels (safe to re-run)
+# Re-sync labels (safe to re-run anytime)
 npx auto-maintainer labels
 ```
 
 ## Cost
 
-Each Triage Agent run costs roughly $0.01–0.05 in API credits (or uses your subscription). Implementation runs cost more since they do real work — budget accordingly for active repos. You can control costs by adjusting `--max-turns` and `--model` in the workflow files.
+Triage runs are cheap (~$0.01–0.05 per issue/PR). Implementation runs cost more since the bot is writing real code — scale with the size of the fix. You can tune `--max-turns` and `--model` in the workflow files to control spend.
+
+If you're on a Claude subscription, it uses your existing plan — no extra API costs.
 
 ## Security
 
-- **Privilege separation** — Triage Agent is read-only. It can label and comment but can't push code. Implementation Agent has write access but only triggers on trusted label events, never on raw user input.
-- **No shell access for triage** — the Triage Agent can't run Bash commands. It uses only file search tools and GitHub's API.
-- **Action pinning** — workflows pin `claude-code-action` to a specific commit SHA, not a mutable tag.
-- **Adversarial defense** — both agents check for prompt injection and social engineering before acting. Suspicious content gets escalated to `state:awaiting-human`.
+- **The triage bot can't touch your code.** It reads, labels, and comments. That's it. No shell access, no file editing.
+- **The implementation bot only runs on trusted triggers** — label events from the triage bot or maintainers, never raw user input.
+- **Actions are pinned to commit SHAs** — not mutable tags. No supply-chain risk from upstream tag changes.
+- **Adversarial defense built in** — both agents detect prompt injection and social engineering. Suspicious content gets escalated, not executed.
 
 ## License
 
