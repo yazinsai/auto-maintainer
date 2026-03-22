@@ -22,20 +22,7 @@ concurrency:
   group: "triage-${{ github.event.issue.number || github.event.pull_request.number || github.event.pull_request_review.pull_request.number || 'unknown' }}"
 
 jobs:
-  generate-token:
-    runs-on: ubuntu-latest
-    outputs:
-      token: "${{ steps.app-token.outputs.token }}"
-    steps:
-      - name: Generate GitHub App token
-        id: app-token
-        uses: actions/create-github-app-token@v1
-        with:
-          app-id: "${{ secrets.RPB_APP_ID }}"
-          private-key: "${{ secrets.RPB_APP_PRIVATE_KEY }}"
-
   triage:
-    needs: generate-token
     runs-on: ubuntu-latest
     steps:
       - name: Checkout default branch
@@ -65,7 +52,7 @@ jobs:
             --- REPO POLICY ---
             ${{ steps.policy.outputs.content }}
           claude_args: "--allowedTools Read Grep Glob --max-turns 15 --model claude-sonnet-4-6"
-          github_token: "${{ needs.generate-token.outputs.token }}"
+          github_token: "${{ secrets.AUTO_MAINTAINER_PAT }}"
         env:
           ANTHROPIC_API_KEY: "${{ secrets.ANTHROPIC_API_KEY }}"
           CLAUDE_CODE_OAUTH_TOKEN: "${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}"

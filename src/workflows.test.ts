@@ -54,11 +54,12 @@ describe("workflow templates", () => {
     }
   });
 
-  it("all workflows reference canonical App secret names", () => {
+  it("all workflows reference PAT secret", () => {
     for (const name of ["triage-agent.yml", "implement-agent.yml", "gate-runner.yml", "release-runner.yml"]) {
       const content = readFileSync(resolve(templatesDir, name), "utf-8");
-      expect(content).toContain("RPB_APP_ID");
-      expect(content).toContain("RPB_APP_PRIVATE_KEY");
+      expect(content).toContain("AUTO_MAINTAINER_PAT");
+      expect(content).not.toContain("RPB_APP_ID");
+      expect(content).not.toContain("RPB_APP_PRIVATE_KEY");
     }
   });
 

@@ -14,23 +14,10 @@ concurrency:
   group: "implement-${{ github.event.issue.number }}"
 
 jobs:
-  generate-token:
+  implement:
     if: >-
       github.event.label.name == 'state:planned'
       && !contains(toJSON(github.event.issue.labels.*.name), 'risk:high')
-    runs-on: ubuntu-latest
-    outputs:
-      token: "${{ steps.app-token.outputs.token }}"
-    steps:
-      - name: Generate GitHub App token
-        id: app-token
-        uses: actions/create-github-app-token@v1
-        with:
-          app-id: "${{ secrets.RPB_APP_ID }}"
-          private-key: "${{ secrets.RPB_APP_PRIVATE_KEY }}"
-
-  implement:
-    needs: generate-token
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repo
@@ -58,14 +45,14 @@ jobs:
             --- REPO POLICY ---
             ${{ steps.policy.outputs.content }}
           claude_args: "--allowedTools Edit Read Write Grep Glob Bash(git:*) --max-turns 40 --model claude-sonnet-4-6"
-          github_token: "${{ needs.generate-token.outputs.token }}"
+          github_token: "${{ secrets.AUTO_MAINTAINER_PAT }}"
         env:
           ANTHROPIC_API_KEY: "${{ secrets.ANTHROPIC_API_KEY }}"
           CLAUDE_CODE_OAUTH_TOKEN: "${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}"
 
       - name: Create PR if commits were pushed
         env:
-          GH_TOKEN: "${{ needs.generate-token.outputs.token }}"
+          GH_TOKEN: "${{ secrets.AUTO_MAINTAINER_PAT }}"
         run: |
           # Check if there are new commits beyond the initial checkout
           if [ "$(git rev-list --count HEAD ^origin/${{ github.event.repository.default_branch }})" -gt 0 ]; then

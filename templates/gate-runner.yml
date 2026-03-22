@@ -19,20 +19,7 @@ concurrency:
   group: "gate-${{ github.event.pull_request.number || 'check' }}"
 
 jobs:
-  generate-token:
-    runs-on: ubuntu-latest
-    outputs:
-      token: "${{ steps.app-token.outputs.token }}"
-    steps:
-      - name: Generate GitHub App token
-        id: app-token
-        uses: actions/create-github-app-token@v1
-        with:
-          app-id: "${{ secrets.RPB_APP_ID }}"
-          private-key: "${{ secrets.RPB_APP_PRIVATE_KEY }}"
-
   gate-check:
-    needs: generate-token
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repo
@@ -41,7 +28,7 @@ jobs:
       - name: Determine PRs to check
         id: prs
         env:
-          GH_TOKEN: "${{ needs.generate-token.outputs.token }}"
+          GH_TOKEN: "${{ secrets.AUTO_MAINTAINER_PAT }}"
         run: |
           if [ "${{ github.event_name }}" = "pull_request_target" ]; then
             echo "numbers=${{ github.event.pull_request.number }}" >> "$GITHUB_OUTPUT"
@@ -53,7 +40,7 @@ jobs:
 
       - name: Run gate checks
         env:
-          GH_TOKEN: "${{ needs.generate-token.outputs.token }}"
+          GH_TOKEN: "${{ secrets.AUTO_MAINTAINER_PAT }}"
         run: |
           for PR_NUMBER in ${{ steps.prs.outputs.numbers }}; do
             echo "::group::Checking PR #${PR_NUMBER}"
