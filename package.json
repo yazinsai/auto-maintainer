@@ -1,6 +1,6 @@
 {
   "name": "auto-maintainer",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "Scaffold an autonomous AI-powered repo maintainer onto any GitHub repo",
   "type": "module",
   "bin": {
@@ -29,7 +29,9 @@
     "node": ">=18"
   },
   "dependencies": {
-    "commander": "^14.0.3"
+    "@clack/prompts": "^1.1.0",
+    "commander": "^14.0.3",
+    "picocolors": "^1.1.1"
   },
   "devDependencies": {
     "@types/node": "^25.5.0",

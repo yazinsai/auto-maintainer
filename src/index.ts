@@ -1,5 +1,10 @@
 import { execSync } from "node:child_process";
+import { readFileSync } from "node:fs";
+import { join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 import { Command } from "commander";
+import * as p from "@clack/prompts";
+import pc from "picocolors";
 import { syncLabels } from "./commands/labels.js";
 import {
   scaffoldFiles,
@@ -9,116 +14,181 @@ import {
   detectCiWorkflowName,
   extractClaudeOAuthToken,
   generatePolicy,
-  prompt,
-  promptChoice,
 } from "./commands/init.js";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const pkg = JSON.parse(readFileSync(join(__dirname, "../package.json"), "utf-8"));
 
 const program = new Command();
 
 program
   .name("auto-maintainer")
   .description("Scaffold an autonomous AI-powered repo maintainer")
-  .version("0.1.0");
+  .version(pkg.version);
 
 program
   .command("labels")
   .description("Sync label taxonomy to the current repo")
   .action(() => {
-    console.log("Syncing labels...");
-    syncLabels();
-    console.log("Done.");
+    p.intro(pc.bgCyan(pc.black(" auto-maintainer ")));
+    const s = p.spinner();
+    s.start("Syncing labels");
+    const result = syncLabels();
+    const parts: string[] = [];
+    if (result.created > 0) parts.push(`${result.created} created`);
+    if (result.updated > 0) parts.push(`${result.updated} updated`);
+    if (result.upToDate > 0) parts.push(`${result.upToDate} up to date`);
+    s.stop(`Labels synced — ${parts.join(", ")}`);
+    p.outro(pc.green("Done!"));
   });
 
 program
   .command("init")
   .description("Scaffold auto-maintainer onto the current repo")
   .action(async () => {
+    p.intro(pc.bgCyan(pc.black(` auto-maintainer v${pkg.version} `)));
+
     try {
       // 1. Find repo
       const repoRoot = findRepoRoot();
-      console.log(`Found repo at ${repoRoot}`);
+      const repoName = repoRoot.split("/").pop() || repoRoot;
 
       // 2. Check gh
       const ghVersion = checkGhAvailable();
-      console.log(`GitHub CLI: ${ghVersion}`);
+      p.log.info(`${pc.green("Found repo:")} ${repoName}  ${pc.dim(`(${ghVersion})`)}`);
 
       // 3. Resolve action SHA
-      console.log("Resolving claude-code-action version...");
+      const shaSpinner = p.spinner();
+      shaSpinner.start("Resolving claude-code-action version");
       let actionSha: string;
       try {
         actionSha = resolveClaudeActionSha();
-        console.log(`Pinned to ${actionSha.slice(0, 12)}`);
+        shaSpinner.stop(`Pinned to ${pc.cyan(actionSha.slice(0, 12))}`);
       } catch {
-        console.warn("Could not resolve claude-code-action SHA. Using placeholder.");
+        shaSpinner.error("Could not resolve SHA — using placeholder");
         actionSha = "REPLACE_WITH_SHA";
       }
 
       // 4. Detect CI workflow
       const ciName = await detectCiWorkflowName(repoRoot);
-      console.log(`CI workflow: ${ciName}`);
+      if (ciName === "CI") {
+        p.log.warn(
+          `No CI workflow found — using placeholder.\n` +
+          pc.dim("  The release runner won't trigger until you have a CI workflow.\n") +
+          pc.dim("  Set ci_workflow_name in .github/repo-policy.yml when ready.")
+        );
+      } else {
+        p.log.success(`CI workflow: ${pc.cyan(ciName)}`);
+      }
 
       // 5. Scaffold files
-      console.log("\nScaffolding files...");
+      const scaffoldSpinner = p.spinner();
+      scaffoldSpinner.start("Scaffolding workflow files");
       const result = scaffoldFiles(repoRoot, { claudeActionSha: actionSha, ciWorkflowName: ciName });
-      for (const f of result.created) console.log(`  Created ${f}`);
-      for (const f of result.skipped) console.log(`  Skipped ${f} (already exists)`);
+      scaffoldSpinner.stop("Workflows scaffolded");
+
+      if (result.created.length > 0) {
+        for (const f of result.created) {
+          p.log.success(`Created ${pc.cyan(f)}`);
+        }
+      }
+      if (result.skipped.length > 0) {
+        p.log.message(pc.dim(`${result.skipped.length} file(s) already exist — skipped`));
+      }
 
       // 6. Sync labels
-      console.log("\nSyncing labels...");
-      syncLabels();
+      const labelSpinner = p.spinner();
+      labelSpinner.start("Syncing labels");
+      const labelResult = syncLabels();
+      const labelParts: string[] = [];
+      if (labelResult.created > 0) labelParts.push(`${labelResult.created} created`);
+      if (labelResult.updated > 0) labelParts.push(`${labelResult.updated} updated`);
+      if (labelResult.upToDate > 0) labelParts.push(`${labelResult.upToDate} up to date`);
+      labelSpinner.stop(`Labels synced — ${labelParts.join(", ")}`);
 
       // 7. Claude auth
-      console.log("\n--- Claude Authentication ---");
-      const authChoice = await promptChoice("How do you authenticate with Claude?", [
-        "Anthropic API key (sk-ant-...)",
-        "Claude subscription (Pro/Max/Team — auto-detected from local Claude Code)",
-      ]);
+      const authChoice = await p.select({
+        message: "How do you authenticate with Claude?",
+        options: [
+          { value: "api_key", label: "Anthropic API key", hint: "sk-ant-..." },
+          { value: "oauth", label: "Claude subscription", hint: "Pro/Max/Team — auto-detected" },
+        ],
+      });
+
+      if (p.isCancel(authChoice)) {
+        p.cancel("Setup cancelled.");
+        process.exit(0);
+      }
 
       let claudeToken: string | null = null;
       let secretName: string;
 
-      if (authChoice === 0) {
+      if (authChoice === "api_key") {
         secretName = "ANTHROPIC_API_KEY";
-        claudeToken = await prompt("Paste your API key: ");
+        const key = await p.password({
+          message: "Paste your API key:",
+        });
+        if (p.isCancel(key)) {
+          p.cancel("Setup cancelled.");
+          process.exit(0);
+        }
+        claudeToken = key;
       } else {
         secretName = "CLAUDE_CODE_OAUTH_TOKEN";
-        console.log("  Looking for Claude Code credentials...");
+        const authSpinner = p.spinner();
+        authSpinner.start("Looking for Claude Code credentials");
         claudeToken = extractClaudeOAuthToken();
         if (claudeToken) {
-          console.log("  [ok] Found OAuth token from local Claude Code installation");
+          authSpinner.stop("Found OAuth token from local Claude Code");
         } else {
-          console.log("  [!] Could not find credentials automatically.");
-          console.log("      Make sure you've signed in with `claude` at least once.");
-          claudeToken = await prompt("  Or paste a token manually: ");
+          authSpinner.error("Could not find credentials automatically");
+          p.log.warn("Make sure you've signed in with `claude` at least once.");
+          const manualToken = await p.password({
+            message: "Or paste a token manually:",
+          });
+          if (p.isCancel(manualToken)) {
+            p.cancel("Setup cancelled.");
+            process.exit(0);
+          }
+          claudeToken = manualToken;
         }
       }
 
       if (claudeToken) {
         try {
           execSync(`gh secret set ${secretName}`, { input: claudeToken, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] });
-          console.log(`  [ok] ${secretName} saved`);
+          p.log.success(`${pc.cyan(secretName)} saved as repo secret`);
         } catch {
-          console.error(`  [!] Failed to set ${secretName}. Run manually: gh secret set ${secretName}`);
+          p.log.error(`Failed to set ${secretName}. Run manually: ${pc.dim(`gh secret set ${secretName}`)}`);
         }
       } else {
-        console.log(`  [!] Skipped. Set it later: gh secret set ${secretName}`);
+        p.log.warn(`Skipped. Set it later: ${pc.dim(`gh secret set ${secretName}`)}`);
       }
 
       // 8. GitHub PAT
-      console.log("\n--- GitHub PAT ---");
-      console.log("auto-maintainer needs a GitHub token to trigger workflows and merge PRs.");
-      console.log("Create one at: https://github.com/settings/tokens/new?scopes=repo,workflow&description=auto-maintainer");
-      const pat = await prompt("Paste your PAT: ");
+      p.log.message(
+        `auto-maintainer needs a GitHub token to trigger workflows and merge PRs.\n` +
+        pc.dim("Create one at: https://github.com/settings/tokens/new?scopes=repo,workflow&description=auto-maintainer")
+      );
+
+      const pat = await p.password({
+        message: "Paste your GitHub PAT:",
+      });
+
+      if (p.isCancel(pat)) {
+        p.cancel("Setup cancelled.");
+        process.exit(0);
+      }
 
       if (pat) {
         try {
-          execSync(`gh secret set AUTO_MAINTAINER_PAT`, { input: pat, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] });
-          console.log("  [ok] AUTO_MAINTAINER_PAT saved");
+          execSync("gh secret set AUTO_MAINTAINER_PAT", { input: pat, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] });
+          p.log.success(`${pc.cyan("AUTO_MAINTAINER_PAT")} saved as repo secret`);
         } catch {
-          console.error("  [!] Failed to set PAT. Run manually: gh secret set AUTO_MAINTAINER_PAT");
+          p.log.error(`Failed to set PAT. Run manually: ${pc.dim("gh secret set AUTO_MAINTAINER_PAT")}`);
         }
       } else {
-        console.log("  [!] Skipped. Set it later: gh secret set AUTO_MAINTAINER_PAT");
+        p.log.warn(`Skipped. Set it later: ${pc.dim("gh secret set AUTO_MAINTAINER_PAT")}`);
       }
 
       // 9. Generate policy
@@ -127,25 +197,34 @@ program
       }
 
       // 10. Commit and push
-      console.log("\n--- Almost done ---");
-      const commitAnswer = await prompt("Commit and push now? [Y/n]: ");
+      const shouldCommit = await p.confirm({
+        message: "Commit and push now?",
+        initialValue: true,
+      });
 
-      if (commitAnswer.toLowerCase() !== "n") {
+      if (p.isCancel(shouldCommit)) {
+        p.cancel("Setup cancelled.");
+        process.exit(0);
+      }
+
+      if (shouldCommit) {
+        const pushSpinner = p.spinner();
+        pushSpinner.start("Committing and pushing");
         try {
           const allFiles = [...result.created];
           execSync(`git add ${allFiles.map(f => `"${f}"`).join(" ")}`, { cwd: repoRoot, stdio: "pipe" });
           execSync('git commit -m "Add auto-maintainer workflows"', { cwd: repoRoot, stdio: "pipe" });
           execSync("git push", { cwd: repoRoot, stdio: "pipe" });
-          console.log("  [ok] Committed and pushed");
+          pushSpinner.stop("Committed and pushed");
         } catch (e) {
-          console.error(`  [!] Git failed: ${e instanceof Error ? e.message : e}`);
-          console.log("  Commit manually: git add .github/ && git commit -m 'Add auto-maintainer' && git push");
+          pushSpinner.error("Git push failed");
+          p.log.warn(`Commit manually: ${pc.dim("git add .github/ && git commit -m 'Add auto-maintainer' && git push")}`);
         }
       }
 
-      console.log("\nDone! Open an issue to see the triage agent in action.");
+      p.outro("🎉 You're all set! Open an issue to see auto-maintainer in action.");
     } catch (err) {
-      console.error(`Error: ${err instanceof Error ? err.message : err}`);
+      p.cancel(`Error: ${err instanceof Error ? err.message : err}`);
       process.exit(1);
     }
   });

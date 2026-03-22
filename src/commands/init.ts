@@ -2,7 +2,8 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync, readdirSync } from 
 import { join, resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { execSync } from "node:child_process";
-import { createInterface } from "node:readline";
+import * as p from "@clack/prompts";
+import pc from "picocolors";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const TEMPLATES_DIR = resolve(__dirname, "../../templates");
@@ -25,6 +26,13 @@ const FILES_TO_SCAFFOLD = [
   { template: "repo-policy.md", dest: ".github/repo-policy.md" },
   { template: "repo-policy.yml", dest: ".github/repo-policy.yml" },
 ];
+
+const AUTO_MAINTAINER_WORKFLOWS = new Set([
+  "triage-agent.yml",
+  "implement-agent.yml",
+  "gate-runner.yml",
+  "release-runner.yml",
+]);
 
 // embedPrompt replaces a placeholder in YAML with multi-line content,
 // preserving the indentation level of the placeholder line.
@@ -82,7 +90,6 @@ export function extractClaudeOAuthToken(): string | null {
   const platform = process.platform;
 
   if (platform === "darwin") {
-    // macOS: token stored in Keychain under "Claude Code-credentials"
     try {
       const raw = execSync(
         'security find-generic-password -s "Claude Code-credentials" -w',
@@ -96,7 +103,6 @@ export function extractClaudeOAuthToken(): string | null {
   }
 
   if (platform === "linux") {
-    // Linux: token stored in ~/.claude/credentials.json or via secret-tool
     const homedir = process.env.HOME || "";
     const credPath = join(homedir, ".claude", "credentials.json");
     if (existsSync(credPath)) {
@@ -108,7 +114,6 @@ export function extractClaudeOAuthToken(): string | null {
       }
     }
 
-    // Try secret-tool (GNOME Keyring)
     try {
       const raw = execSync(
         'secret-tool lookup service "Claude Code-credentials"',
@@ -124,24 +129,6 @@ export function extractClaudeOAuthToken(): string | null {
   return null;
 }
 
-export async function prompt(question: string): Promise<string> {
-  const rl = createInterface({ input: process.stdin, output: process.stdout });
-  return new Promise((resolve) => {
-    rl.question(question, (answer) => {
-      rl.close();
-      resolve(answer.trim());
-    });
-  });
-}
-
-export async function promptChoice(question: string, choices: string[]): Promise<number> {
-  console.log(question);
-  choices.forEach((c, i) => console.log(`  ${i + 1}. ${c}`));
-  const answer = await prompt("Choice: ");
-  const idx = parseInt(answer, 10) - 1;
-  return idx >= 0 && idx < choices.length ? idx : 0;
-}
-
 export function isClaudeCliAvailable(): boolean {
   try {
     execSync("claude --version", { encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] });
@@ -154,7 +141,6 @@ export function isClaudeCliAvailable(): boolean {
 export function gatherRepoContext(repoRoot: string): string {
   const parts: string[] = [];
 
-  // File tree (excluding common noise)
   try {
     const tree = execSync(
       'find . -type f -not -path "*/node_modules/*" -not -path "*/.git/*" -not -path "*/dist/*" -not -path "*/.next/*" -not -path "*/vendor/*" -not -path "*/__pycache__/*" | sort | head -200',
@@ -163,7 +149,6 @@ export function gatherRepoContext(repoRoot: string): string {
     parts.push("## File tree\n" + tree);
   } catch { /* skip */ }
 
-  // File type summary (extensions and counts)
   try {
     const types = execSync(
       'find . -type f -not -path "*/node_modules/*" -not -path "*/.git/*" -not -path "*/dist/*" | sed \'s/.*\\.//\' | sort | uniq -c | sort -rn | head -20',
@@ -172,20 +157,17 @@ export function gatherRepoContext(repoRoot: string): string {
     parts.push("## File types\n" + types);
   } catch { /* skip */ }
 
-  // README
   const readmePath = join(repoRoot, "README.md");
   if (existsSync(readmePath)) {
     const content = readFileSync(readmePath, "utf-8").split("\n").slice(0, 500).join("\n");
     parts.push("## README.md\n" + content);
   }
 
-  // package.json
   const pkgPath = join(repoRoot, "package.json");
   if (existsSync(pkgPath)) {
     parts.push("## package.json\n" + readFileSync(pkgPath, "utf-8"));
   }
 
-  // CI workflows (skip auto-maintainer ones)
   const workflowsDir = join(repoRoot, ".github", "workflows");
   if (existsSync(workflowsDir)) {
     const skipFiles = ["triage-agent.yml", "implement-agent.yml", "gate-runner.yml", "release-runner.yml"];
@@ -240,39 +222,20 @@ export function validatePolicy(content: string): boolean {
 }
 
 export function generatePolicy(repoRoot: string): boolean {
-  console.log("\n--- Policy Generation ---");
-
   if (!isClaudeCliAvailable()) {
-    // Path B: print prompt for user to paste elsewhere
-    console.log("  Claude Code CLI not found. To generate project-specific rules,");
-    console.log("  paste this prompt into your favorite AI coding tool:\n");
-    console.log("  -------------------------------------------------------");
-    console.log("  Analyze this repository and generate a .github/repo-policy.md");
-    console.log("  file with these sections:");
-    console.log("");
-    console.log("  # Product Guardrails");
-    console.log("  What this project values. Used for judgment calls.");
-    console.log("");
-    console.log("  # Risk Classification");
-    console.log("  ## Always High Risk");
-    console.log("  (list areas that should always require human review)");
-    console.log("  ## Always Low Risk");
-    console.log("  (list areas safe for autonomous handling)");
-    console.log("");
-    console.log("  # Decision Rules");
-    console.log("  ## Bugs / ## Features / ## External PRs");
-    console.log("");
-    console.log("  # Repo-Specific Rules");
-    console.log("  Anything unique to this project.");
-    console.log("");
-    console.log("  Read the codebase and write specific rules, not placeholders.");
-    console.log("  -------------------------------------------------------");
-    console.log("\n  Then replace .github/repo-policy.md with the output.");
+    p.log.warn("Claude Code CLI not found. To generate project-specific rules:");
+    p.log.message(pc.dim(
+      "Paste this prompt into your AI coding tool:\n" +
+      "  \"Analyze this repository and generate a .github/repo-policy.md\n" +
+      "   with sections: Product Guardrails, Risk Classification,\n" +
+      "   Decision Rules, Repo-Specific Rules.\"\n" +
+      "Then replace .github/repo-policy.md with the output."
+    ));
     return false;
   }
 
-  // Path A: auto-generate with Claude
-  console.log("  Analyzing repo to generate project-specific rules...");
+  const s = p.spinner();
+  s.start("Analyzing repo to generate project policy");
   try {
     const context = gatherRepoContext(repoRoot);
     const fullPrompt = POLICY_PROMPT_TEMPLATE + context;
@@ -286,21 +249,22 @@ export function generatePolicy(repoRoot: string): boolean {
     }).trim();
 
     if (!validatePolicy(output)) {
-      console.log("  [!] Generated policy missing required sections (kept template)");
+      s.error("Policy generation incomplete — kept template");
+      p.log.warn("Edit .github/repo-policy.md manually to customize.");
       return false;
     }
 
-    // Strip any markdown code fences Claude might wrap the output in
     let policy = output;
     if (policy.startsWith("```")) {
       policy = policy.replace(/^```\w*\n/, "").replace(/\n```$/, "");
     }
 
     writeFileSync(join(repoRoot, ".github", "repo-policy.md"), policy);
-    console.log("  [ok] Generated project-specific policy from repo analysis");
+    s.stop("Policy generated from repo analysis");
     return true;
   } catch {
-    console.log("  [!] Could not auto-generate policy (kept template). Edit .github/repo-policy.md manually.");
+    s.error("Could not auto-generate policy — kept template");
+    p.log.warn("Edit .github/repo-policy.md manually to customize.");
     return false;
   }
 }
@@ -343,7 +307,6 @@ export function resolveClaudeActionSha(): string {
   const [objectType, sha] = refOutput.split("\n");
 
   if (objectType === "tag") {
-    // Annotated tag — follow to the underlying commit
     const commitSha = execSync(
       `gh api repos/anthropics/claude-code-action/git/tags/${sha} --jq '.object.sha'`,
       { encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] }
@@ -354,22 +317,9 @@ export function resolveClaudeActionSha(): string {
   return sha;
 }
 
-const NO_CI_DISCLAIMER =
-  "  The release runner won't trigger until you have a CI workflow.\n" +
-  "  When you add one, set ci_workflow_name in .github/repo-policy.yml to match.";
-
-const AUTO_MAINTAINER_WORKFLOWS = new Set([
-  "triage-agent.yml",
-  "implement-agent.yml",
-  "gate-runner.yml",
-  "release-runner.yml",
-]);
-
 export async function detectCiWorkflowName(repoRoot: string): Promise<string> {
   const workflowsDir = join(repoRoot, ".github", "workflows");
   if (!existsSync(workflowsDir)) {
-    console.log("  No CI workflow found — using placeholder.");
-    console.log(NO_CI_DISCLAIMER);
     return "CI";
   }
 
@@ -387,8 +337,6 @@ export async function detectCiWorkflowName(repoRoot: string): Promise<string> {
   }
 
   if (workflows.length === 0) {
-    console.log("  No CI workflow found — using placeholder.");
-    console.log(NO_CI_DISCLAIMER);
     return "CI";
   }
 
@@ -396,32 +344,28 @@ export async function detectCiWorkflowName(repoRoot: string): Promise<string> {
     return workflows[0].name;
   }
 
-  // Multiple workflows — ask the user to pick, with a "none" escape hatch
-  console.log("\nMultiple workflows detected:");
-  for (let i = 0; i < workflows.length; i++) {
-    console.log(`  ${i + 1}. ${workflows[i].name} (${workflows[i].file})`);
-  }
-  console.log(`  0. None — I don't have a CI workflow yet`);
+  const options = [
+    ...workflows.map((w) => ({
+      value: w.name,
+      label: w.name,
+      hint: w.file,
+    })),
+    { value: "__none__", label: "None", hint: "I don't have a CI workflow yet" },
+  ];
 
-  const rl = createInterface({ input: process.stdin, output: process.stdout });
-  const answer = await new Promise<string>((resolve) => {
-    rl.question("Which workflow is your CI? [number]: ", (ans) => {
-      rl.close();
-      resolve(ans.trim());
-    });
+  const choice = await p.select({
+    message: "Which workflow is your CI?",
+    options,
   });
 
-  const idx = parseInt(answer, 10);
-  if (idx === 0) {
-    console.log(NO_CI_DISCLAIMER);
+  if (p.isCancel(choice)) {
+    p.cancel("Setup cancelled.");
+    process.exit(0);
+  }
+
+  if (choice === "__none__") {
     return "CI";
   }
 
-  const picked = idx - 1;
-  if (picked >= 0 && picked < workflows.length) {
-    return workflows[picked].name;
-  }
-
-  console.warn(`  Invalid selection "${answer}". Using first workflow.`);
-  return workflows[0].name;
+  return choice as string;
 }
