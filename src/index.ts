@@ -7,6 +7,8 @@ import {
   checkGhAvailable,
   resolveClaudeActionSha,
   detectCiWorkflowName,
+  prompt,
+  promptChoice,
 } from "./commands/init.js";
 
 const program = new Command();
@@ -27,7 +29,7 @@ program
 
 program
   .command("init")
-  .description("Scaffold repo-policy-bot onto the current repo")
+  .description("Scaffold auto-maintainer onto the current repo")
   .action(async () => {
     try {
       // 1. Find repo
@@ -63,60 +65,64 @@ program
       console.log("\nSyncing labels...");
       syncLabels();
 
-      // 7. Workflow chaining auth
-      console.log("\n--- Workflow Chaining Setup ---");
-      console.log("Workflows need a GitHub App or PAT to trigger each other.");
-      console.log("Option 1 (recommended): Create a GitHub App");
-      console.log("  -> https://github.com/settings/apps/new");
-      console.log("  -> Permissions: Issues (R/W), Pull Requests (R/W), Contents (R/W)");
-      console.log("  -> After creating, run:");
-      console.log("    gh secret set RPB_APP_ID");
-      console.log("    gh secret set RPB_APP_PRIVATE_KEY");
-      console.log("Option 2: Use a Personal Access Token");
-      console.log("  -> Create a fine-grained PAT with issues, pull_requests, contents write access");
-      console.log("  -> Run: gh secret set RPB_PAT");
-
-      // Check if secrets exist
-      try {
-        const secrets = execSync("gh secret list", { encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] });
-        const hasApp = secrets.includes("RPB_APP_ID") && secrets.includes("RPB_APP_PRIVATE_KEY");
-        const hasPat = secrets.includes("RPB_PAT");
-        if (hasApp) console.log("  [ok] GitHub App credentials found");
-        else if (hasPat) console.log("  [ok] PAT found");
-        else console.log("  [!] No workflow chaining credentials found yet");
-      } catch {
-        console.log("  [!] Could not check secrets (not authenticated with gh?)");
-      }
-
-      // 8. Claude auth
+      // 7. Claude auth
       console.log("\n--- Claude Authentication ---");
-      console.log("Option 1: Claude subscription (Pro/Max/Team)");
-      console.log("  -> Run: claude setup-ci");
-      console.log("  -> This stores CLAUDE_CODE_OAUTH_TOKEN as a repo secret");
-      console.log("Option 2: Anthropic API key");
-      console.log("  -> Run: gh secret set ANTHROPIC_API_KEY");
+      const authChoice = await promptChoice("How do you authenticate with Claude?", [
+        "Anthropic API key (sk-ant-...)",
+        "Claude subscription token (run `claude setup-token` first)",
+      ]);
 
-      // Check
-      try {
-        const secrets = execSync("gh secret list", { encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] });
-        const hasOauth = secrets.includes("CLAUDE_CODE_OAUTH_TOKEN");
-        const hasApiKey = secrets.includes("ANTHROPIC_API_KEY");
-        if (hasOauth) console.log("  [ok] Claude OAuth token found");
-        else if (hasApiKey) console.log("  [ok] Anthropic API key found");
-        else console.log("  [!] No Claude credentials found yet");
-      } catch {
-        // already warned above
+      const secretName = authChoice === 0 ? "ANTHROPIC_API_KEY" : "CLAUDE_CODE_OAUTH_TOKEN";
+      const claudeToken = await prompt(`Paste your ${authChoice === 0 ? "API key" : "token"}: `);
+
+      if (claudeToken) {
+        try {
+          execSync(`gh secret set ${secretName}`, { input: claudeToken, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] });
+          console.log(`  [ok] ${secretName} saved`);
+        } catch {
+          console.error(`  [!] Failed to set ${secretName}. Run manually: gh secret set ${secretName}`);
+        }
+      } else {
+        console.log(`  [!] Skipped. Set it later: gh secret set ${secretName}`);
       }
 
-      // 9. Summary
-      console.log("\n--- Setup Summary ---");
-      console.log(`Files scaffolded: ${result.created.length} created, ${result.skipped.length} skipped`);
-      console.log("Labels: synced");
-      console.log("\nNext steps:");
-      console.log("1. Set up workflow chaining auth (GitHub App or PAT)");
-      console.log("2. Set up Claude auth (subscription or API key)");
-      console.log("3. Edit .github/repo-policy.md with your project's guidelines");
-      console.log("4. Commit and push the workflow files");
+      // 8. GitHub PAT
+      console.log("\n--- GitHub PAT ---");
+      console.log("auto-maintainer needs a GitHub token to trigger workflows and merge PRs.");
+      console.log("Create one at: https://github.com/settings/tokens/new?scopes=repo,workflow&description=auto-maintainer");
+      const pat = await prompt("Paste your PAT: ");
+
+      if (pat) {
+        try {
+          execSync(`gh secret set AUTO_MAINTAINER_PAT`, { input: pat, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] });
+          console.log("  [ok] AUTO_MAINTAINER_PAT saved");
+        } catch {
+          console.error("  [!] Failed to set PAT. Run manually: gh secret set AUTO_MAINTAINER_PAT");
+        }
+      } else {
+        console.log("  [!] Skipped. Set it later: gh secret set AUTO_MAINTAINER_PAT");
+      }
+
+      // 9. Commit and push
+      console.log("\n--- Almost done ---");
+      console.log("Edit .github/repo-policy.md with your project's rules, then commit and push.");
+      console.log("Or, to get started with the defaults:");
+      const commitAnswer = await prompt("Commit and push now? [Y/n]: ");
+
+      if (commitAnswer.toLowerCase() !== "n") {
+        try {
+          const allFiles = [...result.created];
+          execSync(`git add ${allFiles.map(f => `"${f}"`).join(" ")}`, { cwd: repoRoot, stdio: "pipe" });
+          execSync('git commit -m "Add auto-maintainer workflows"', { cwd: repoRoot, stdio: "pipe" });
+          execSync("git push", { cwd: repoRoot, stdio: "pipe" });
+          console.log("  [ok] Committed and pushed");
+        } catch (e) {
+          console.error(`  [!] Git failed: ${e instanceof Error ? e.message : e}`);
+          console.log("  Commit manually: git add .github/ && git commit -m 'Add auto-maintainer' && git push");
+        }
+      }
+
+      console.log("\nDone! Open an issue to see the triage agent in action.");
     } catch (err) {
       console.error(`Error: ${err instanceof Error ? err.message : err}`);
       process.exit(1);

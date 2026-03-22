@@ -78,6 +78,24 @@ export function scaffoldFiles(repoRoot: string, options: ScaffoldOptions): Scaff
   return { created, skipped };
 }
 
+export async function prompt(question: string): Promise<string> {
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  return new Promise((resolve) => {
+    rl.question(question, (answer) => {
+      rl.close();
+      resolve(answer.trim());
+    });
+  });
+}
+
+export async function promptChoice(question: string, choices: string[]): Promise<number> {
+  console.log(question);
+  choices.forEach((c, i) => console.log(`  ${i + 1}. ${c}`));
+  const answer = await prompt("Choice: ");
+  const idx = parseInt(answer, 10) - 1;
+  return idx >= 0 && idx < choices.length ? idx : 0;
+}
+
 export function findRepoRoot(): string {
   let dir = process.cwd();
   while (true) {
