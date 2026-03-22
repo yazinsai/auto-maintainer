@@ -4,6 +4,15 @@ Write your repo's rules in plain Markdown. We give you the GitHub Actions to enf
 
 auto-maintainer triages issues, reviews PRs, fixes bugs, merges code, and cuts releases — autonomously. It reads a policy file you write, follows your rules, and only asks for human input when something is genuinely ambiguous or high-risk.
 
+## Why auto-maintainer
+
+- **Write rules in plain Markdown** — no config DSLs, no YAML schemas. If you can write a bullet list, you can configure it.
+- **Fully autonomous** — triages issues, reviews code, implements fixes, merges PRs, and cuts releases. Humans only get pulled in for high-risk or ambiguous decisions.
+- **Use your existing Claude subscription** — works with Claude Pro, Max, or Team plans. No separate API billing required. Or bring your own API key if you prefer.
+- **Works with your existing CI** — your tests, linters, and smoke tests run as normal. Nothing merges until your checks pass.
+- **One command setup** — `npx auto-maintainer init` scaffolds everything. Edit one file, push, done.
+- **Secure by design** — triage bot can't touch your code. Implementation bot only triggers on trusted events. Actions pinned to commit SHAs.
+
 ## The idea
 
 Most repo maintenance is rule-following. You probably already have rules — they're just in your head:
