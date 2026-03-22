@@ -5,7 +5,7 @@ Write your repo's rules in plain Markdown. We give you the GitHub Actions to enf
 auto-maintainer triages issues, reviews PRs, fixes bugs, merges code, and cuts releases — autonomously. It reads a policy file you write, follows your rules, and only asks for human input when something is genuinely ambiguous or high-risk.
 
 <p align="center">
-  <img src="assets/hero.png" width="600" alt="Before: 147 issues and 38 PRs piling up. After: 3 items needing your input, everything else handled." />
+  <img src="assets/hero.png" width="700" alt="Before: 147 issues and 38 PRs piling up across 15 pages. After: 3 items awaiting human decision, everything else handled automatically." />
 </p>
 
 ## Why auto-maintainer
