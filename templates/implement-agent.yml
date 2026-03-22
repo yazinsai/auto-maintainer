@@ -44,7 +44,7 @@ jobs:
 
             --- REPO POLICY ---
             ${{ steps.policy.outputs.content }}
-          claude_args: "--allowedTools Edit Read Write Grep Glob Bash(git:*) --max-turns 40 --model claude-sonnet-4-6"
+          claude_args: "--allowedTools Edit Read Write Grep Glob Bash(git:*,gh:*,npm:*,node:*) --max-turns 40 --model claude-sonnet-4-6"
           github_token: "${{ secrets.AUTO_MAINTAINER_PAT }}"
           anthropic_api_key: "${{ secrets.ANTHROPIC_API_KEY }}"
           claude_code_oauth_token: "${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}"

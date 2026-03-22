@@ -31,8 +31,9 @@ gh issue list --state open --limit 5
 **Common gh commands:**
 
 ```bash
-# Apply labels
-gh issue edit <number> --add-label "kind:bug,state:planned,risk:low,resolution:none,release:patch"
+# Apply labels (non-state first, then state LAST — state triggers downstream workflows)
+gh issue edit <number> --add-label "kind:bug,risk:low,resolution:none,release:patch"
+gh issue edit <number> --add-label "state:planned"
 
 # Remove a label
 gh issue edit <number> --remove-label "state:new"
@@ -89,11 +90,11 @@ Every issue and PR gets **exactly one label from each of the 5 namespaces**. App
 ### kind (what it is)
 | Label | Meaning |
 |---|---|
-| `kind:bug` | Something is broken |
-| `kind:feature` | New capability or enhancement |
-| `kind:refactor` | Code improvement with no behavior change |
-| `kind:docs` | Documentation only |
-| `kind:chore` | Maintenance, deps, CI, tooling |
+| `kind:bug` | Broken behavior, regressions, crashes |
+| `kind:feature` | New user-facing capability |
+| `kind:ux` | Copy, layout, interaction, polish |
+| `kind:docs` | README, guides, comments |
+| `kind:housekeeping` | Refactors, cleanup, dependencies |
 
 ### state (where it is in the workflow)
 | Label | Meaning |
@@ -117,11 +118,12 @@ Every issue and PR gets **exactly one label from each of the 5 namespaces**. App
 ### resolution (outcome)
 | Label | Meaning |
 |---|---|
-| `resolution:none` | No resolution yet |
-| `resolution:fixed` | Issue was fixed or PR was merged |
-| `resolution:duplicate` | Duplicate of another issue |
-| `resolution:wontfix` | Intentionally declined |
-| `resolution:invalid` | Not a real issue (spam, misunderstanding, etc.) |
+| `resolution:none` | Active, not yet resolved |
+| `resolution:merged` | PR merged |
+| `resolution:duplicate` | Duplicate of existing issue |
+| `resolution:already-fixed` | Already addressed |
+| `resolution:declined` | Won't fix / won't implement |
+| `resolution:out-of-scope` | Outside project scope |
 
 ### release (versioning impact)
 | Label | Meaning |
@@ -186,7 +188,9 @@ When a new issue arrives (or an existing one needs re-triage):
    - Bug without repro steps → `state:needs-repro`
    - Ambiguous or high-risk → `state:awaiting-human`
    - Invalid or declined → `state:done` with appropriate resolution
-6. **Apply labels** — run `gh issue edit <number> --add-label "..."` with all 5 namespace labels
+6. **Apply labels** — apply labels in TWO separate commands:
+   - First: `gh issue edit <number> --add-label "kind:*,risk:*,resolution:*,release:*"` (non-state labels)
+   - Then: `gh issue edit <number> --add-label "state:*"` (state label MUST be applied last and alone — this triggers downstream workflows)
 7. **Post comment** — run `gh issue comment <number> --body "..."` explaining your reasoning
 
 ---
