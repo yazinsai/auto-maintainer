@@ -31,7 +31,7 @@ auto-maintainer lets you write those rules in a Markdown file, then handles the 
 npx auto-maintainer init
 ```
 
-That's it. Run this inside any git repo. The CLI sets up four workflow files, creates your starter policy, and syncs labels. It walks you through connecting Claude and setting up a GitHub App.
+That's it. Run this inside any git repo. The CLI sets up four workflow files, creates your starter policy, and syncs labels. It walks you through connecting Claude and setting up your credentials.
 
 Then open `.github/repo-policy.md`, write your rules, commit, and push.
 
@@ -125,16 +125,15 @@ The bot uses 26 labels across 5 namespaces to track state. You don't need to man
 
 ### What you'll need
 
-1. **A GitHub App** — workflow chaining requires it (when the bot labels an issue, that needs to trigger the next workflow). The CLI walks you through creating one.
+1. **A GitHub PAT** — the CLI gives you a direct link to create one with the right scopes.
+2. **Claude access** — either an Anthropic API key or a Claude subscription token (from `claude setup-token`).
 
-2. **Claude access** — pick one:
-   - **Claude subscription** (Pro, Max, or Team) — run `claude setup-ci` during init
-   - **Anthropic API key** — paste it when prompted
+The `init` command handles everything: it asks for your credentials, sets up GitHub secrets, scaffolds workflows, commits, and pushes. You just edit your policy file.
 
 ### CLI commands
 
 ```bash
-# Full setup
+# Full setup — walks you through everything
 npx auto-maintainer init
 
 # Re-sync labels (safe to re-run anytime)
