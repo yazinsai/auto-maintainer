@@ -46,9 +46,8 @@ jobs:
             ${{ steps.policy.outputs.content }}
           claude_args: "--allowedTools Edit Read Write Grep Glob Bash(git:*) --max-turns 40 --model claude-sonnet-4-6"
           github_token: "${{ secrets.AUTO_MAINTAINER_PAT }}"
-        env:
-          ANTHROPIC_API_KEY: "${{ secrets.ANTHROPIC_API_KEY }}"
-          CLAUDE_CODE_OAUTH_TOKEN: "${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}"
+          anthropic_api_key: "${{ secrets.ANTHROPIC_API_KEY }}"
+          claude_code_oauth_token: "${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}"
 
       - name: Create PR if commits were pushed
         env:
