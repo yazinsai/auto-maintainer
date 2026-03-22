@@ -1,10 +1,10 @@
 {
-  "name": "repo-policy-bot",
+  "name": "auto-maintainer",
   "version": "0.1.0",
   "description": "Scaffold an autonomous AI-powered repo maintainer onto any GitHub repo",
   "type": "module",
   "bin": {
-    "repo-policy-bot": "./bin/cli.js"
+    "auto-maintainer": "bin/cli.js"
   },
   "scripts": {
     "build": "tsc",
