@@ -4,6 +4,14 @@ Write your repo's rules in plain Markdown. We give you the GitHub Actions to enf
 
 auto-maintainer triages issues, reviews PRs, fixes bugs, merges code, and cuts releases — autonomously. It reads a policy file you write, follows your rules, and only asks for human input when something is genuinely ambiguous or high-risk.
 
+## Before and after
+
+<p align="center">
+  <img src="assets/before.png" width="420" alt="Before: 147 open issues, 38 PRs waiting for review" />
+  &nbsp;&nbsp;
+  <img src="assets/after.png" width="420" alt="After: 3 items needing human input, everything else handled" />
+</p>
+
 ## Why auto-maintainer
 
 - **Write rules in plain Markdown** — no config DSLs, no YAML schemas. If you can write a bullet list, you can configure it.
