@@ -35,9 +35,10 @@ jobs:
         run: |
           if [ -f .github/repo-policy.md ]; then
             {
-              echo 'content<<POLICY_EOF'
+              echo 'content<<AUTOBOT_POLICY_HEREDOC_a9f3e7'
               cat .github/repo-policy.md
-              echo 'POLICY_EOF'
+              echo ''
+              echo 'AUTOBOT_POLICY_HEREDOC_a9f3e7'
             } >> "$GITHUB_OUTPUT"
           else
             echo "content=" >> "$GITHUB_OUTPUT"
