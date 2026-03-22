@@ -354,15 +354,27 @@ export function resolveClaudeActionSha(): string {
   return sha;
 }
 
+const NO_CI_DISCLAIMER =
+  "  The release runner won't trigger until you have a CI workflow.\n" +
+  "  When you add one, set ci_workflow_name in .github/repo-policy.yml to match.";
+
+const AUTO_MAINTAINER_WORKFLOWS = new Set([
+  "triage-agent.yml",
+  "implement-agent.yml",
+  "gate-runner.yml",
+  "release-runner.yml",
+]);
+
 export async function detectCiWorkflowName(repoRoot: string): Promise<string> {
   const workflowsDir = join(repoRoot, ".github", "workflows");
   if (!existsSync(workflowsDir)) {
-    console.warn("  No .github/workflows directory found. Defaulting CI workflow name to \"CI\".");
+    console.log("  No CI workflow found — using placeholder.");
+    console.log(NO_CI_DISCLAIMER);
     return "CI";
   }
 
   const files = readdirSync(workflowsDir).filter(
-    (f) => f.endsWith(".yml") || f.endsWith(".yaml")
+    (f) => (f.endsWith(".yml") || f.endsWith(".yaml")) && !AUTO_MAINTAINER_WORKFLOWS.has(f)
   );
 
   const workflows: { file: string; name: string }[] = [];
@@ -375,7 +387,8 @@ export async function detectCiWorkflowName(repoRoot: string): Promise<string> {
   }
 
   if (workflows.length === 0) {
-    console.warn("  No named workflows found. Defaulting CI workflow name to \"CI\".");
+    console.log("  No CI workflow found — using placeholder.");
+    console.log(NO_CI_DISCLAIMER);
     return "CI";
   }
 
@@ -383,11 +396,12 @@ export async function detectCiWorkflowName(repoRoot: string): Promise<string> {
     return workflows[0].name;
   }
 
-  // Multiple workflows — ask the user to pick
+  // Multiple workflows — ask the user to pick, with a "none" escape hatch
   console.log("\nMultiple workflows detected:");
   for (let i = 0; i < workflows.length; i++) {
     console.log(`  ${i + 1}. ${workflows[i].name} (${workflows[i].file})`);
   }
+  console.log(`  0. None — I don't have a CI workflow yet`);
 
   const rl = createInterface({ input: process.stdin, output: process.stdout });
   const answer = await new Promise<string>((resolve) => {
@@ -397,9 +411,15 @@ export async function detectCiWorkflowName(repoRoot: string): Promise<string> {
     });
   });
 
-  const idx = parseInt(answer, 10) - 1;
-  if (idx >= 0 && idx < workflows.length) {
-    return workflows[idx].name;
+  const idx = parseInt(answer, 10);
+  if (idx === 0) {
+    console.log(NO_CI_DISCLAIMER);
+    return "CI";
+  }
+
+  const picked = idx - 1;
+  if (picked >= 0 && picked < workflows.length) {
+    return workflows[picked].name;
   }
 
   console.warn(`  Invalid selection "${answer}". Using first workflow.`);
