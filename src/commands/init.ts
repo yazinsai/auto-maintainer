@@ -142,6 +142,172 @@ export async function promptChoice(question: string, choices: string[]): Promise
   return idx >= 0 && idx < choices.length ? idx : 0;
 }
 
+export function isClaudeCliAvailable(): boolean {
+  try {
+    execSync("claude --version", { encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function gatherRepoContext(repoRoot: string): string {
+  const parts: string[] = [];
+
+  // File tree (excluding common noise)
+  try {
+    const tree = execSync(
+      'find . -type f -not -path "*/node_modules/*" -not -path "*/.git/*" -not -path "*/dist/*" -not -path "*/.next/*" -not -path "*/vendor/*" -not -path "*/__pycache__/*" | sort | head -200',
+      { cwd: repoRoot, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] }
+    ).trim();
+    parts.push("## File tree\n" + tree);
+  } catch { /* skip */ }
+
+  // File type summary (extensions and counts)
+  try {
+    const types = execSync(
+      'find . -type f -not -path "*/node_modules/*" -not -path "*/.git/*" -not -path "*/dist/*" | sed \'s/.*\\.//\' | sort | uniq -c | sort -rn | head -20',
+      { cwd: repoRoot, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] }
+    ).trim();
+    parts.push("## File types\n" + types);
+  } catch { /* skip */ }
+
+  // README
+  const readmePath = join(repoRoot, "README.md");
+  if (existsSync(readmePath)) {
+    const content = readFileSync(readmePath, "utf-8").split("\n").slice(0, 500).join("\n");
+    parts.push("## README.md\n" + content);
+  }
+
+  // package.json
+  const pkgPath = join(repoRoot, "package.json");
+  if (existsSync(pkgPath)) {
+    parts.push("## package.json\n" + readFileSync(pkgPath, "utf-8"));
+  }
+
+  // CI workflows (skip auto-maintainer ones)
+  const workflowsDir = join(repoRoot, ".github", "workflows");
+  if (existsSync(workflowsDir)) {
+    const skipFiles = ["triage-agent.yml", "implement-agent.yml", "gate-runner.yml", "release-runner.yml"];
+    const files = readdirSync(workflowsDir).filter(f =>
+      (f.endsWith(".yml") || f.endsWith(".yaml")) && !skipFiles.includes(f)
+    );
+    for (const file of files) {
+      const content = readFileSync(join(workflowsDir, file), "utf-8");
+      parts.push(`## .github/workflows/${file}\n` + content);
+    }
+  }
+
+  return parts.join("\n\n");
+}
+
+const POLICY_PROMPT_TEMPLATE = `Analyze this repository and generate a .github/repo-policy.md file.
+
+The policy file must have exactly these 4 top-level sections:
+
+# Product Guardrails
+What this project values. The triage agent uses these to make judgment calls about what to accept, decline, or escalate.
+
+# Risk Classification
+## Always High Risk
+Areas that should always require human review.
+## Always Low Risk
+Areas safe for autonomous handling.
+
+# Decision Rules
+## Bugs
+How to handle bug reports.
+## Features
+How to handle feature requests.
+## External PRs
+How to handle PRs from outside contributors.
+
+# Repo-Specific Rules
+Anything unique to this project — modules to protect, naming conventions, etc.
+
+Write specific rules based on what you see in the codebase. Do not use placeholder text like "Example:" — every rule should be real and relevant to this project.
+Output ONLY the markdown content, no code fences or preamble.
+
+--- REPOSITORY CONTEXT ---
+`;
+
+const REQUIRED_HEADINGS = [
+  "# Product Guardrails",
+  "# Risk Classification",
+  "# Decision Rules",
+  "# Repo-Specific Rules",
+];
+
+export function validatePolicy(content: string): boolean {
+  return REQUIRED_HEADINGS.every(h => content.includes(h));
+}
+
+export function generatePolicy(repoRoot: string): boolean {
+  console.log("\n--- Policy Generation ---");
+
+  if (!isClaudeCliAvailable()) {
+    // Path B: print prompt for user to paste elsewhere
+    console.log("  Claude Code CLI not found. To generate project-specific rules,");
+    console.log("  paste this prompt into your favorite AI coding tool:\n");
+    console.log("  -------------------------------------------------------");
+    console.log("  Analyze this repository and generate a .github/repo-policy.md");
+    console.log("  file with these sections:");
+    console.log("");
+    console.log("  # Product Guardrails");
+    console.log("  What this project values. Used for judgment calls.");
+    console.log("");
+    console.log("  # Risk Classification");
+    console.log("  ## Always High Risk");
+    console.log("  (list areas that should always require human review)");
+    console.log("  ## Always Low Risk");
+    console.log("  (list areas safe for autonomous handling)");
+    console.log("");
+    console.log("  # Decision Rules");
+    console.log("  ## Bugs / ## Features / ## External PRs");
+    console.log("");
+    console.log("  # Repo-Specific Rules");
+    console.log("  Anything unique to this project.");
+    console.log("");
+    console.log("  Read the codebase and write specific rules, not placeholders.");
+    console.log("  -------------------------------------------------------");
+    console.log("\n  Then replace .github/repo-policy.md with the output.");
+    return false;
+  }
+
+  // Path A: auto-generate with Claude
+  console.log("  Analyzing repo to generate project-specific rules...");
+  try {
+    const context = gatherRepoContext(repoRoot);
+    const fullPrompt = POLICY_PROMPT_TEMPLATE + context;
+
+    const output = execSync("claude -p --no-session-persistence", {
+      input: fullPrompt,
+      encoding: "utf-8",
+      stdio: ["pipe", "pipe", "pipe"],
+      timeout: 60_000,
+      cwd: repoRoot,
+    }).trim();
+
+    if (!validatePolicy(output)) {
+      console.log("  [!] Generated policy missing required sections (kept template)");
+      return false;
+    }
+
+    // Strip any markdown code fences Claude might wrap the output in
+    let policy = output;
+    if (policy.startsWith("```")) {
+      policy = policy.replace(/^```\w*\n/, "").replace(/\n```$/, "");
+    }
+
+    writeFileSync(join(repoRoot, ".github", "repo-policy.md"), policy);
+    console.log("  [ok] Generated project-specific policy from repo analysis");
+    return true;
+  } catch {
+    console.log("  [!] Could not auto-generate policy (kept template). Edit .github/repo-policy.md manually.");
+    return false;
+  }
+}
+
 export function findRepoRoot(): string {
   let dir = process.cwd();
   while (true) {
