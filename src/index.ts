@@ -7,6 +7,7 @@ import {
   checkGhAvailable,
   resolveClaudeActionSha,
   detectCiWorkflowName,
+  extractClaudeOAuthToken,
   prompt,
   promptChoice,
 } from "./commands/init.js";
@@ -69,11 +70,27 @@ program
       console.log("\n--- Claude Authentication ---");
       const authChoice = await promptChoice("How do you authenticate with Claude?", [
         "Anthropic API key (sk-ant-...)",
-        "Claude subscription token (run `claude setup-token` first)",
+        "Claude subscription (Pro/Max/Team — auto-detected from local Claude Code)",
       ]);
 
-      const secretName = authChoice === 0 ? "ANTHROPIC_API_KEY" : "CLAUDE_CODE_OAUTH_TOKEN";
-      const claudeToken = await prompt(`Paste your ${authChoice === 0 ? "API key" : "token"}: `);
+      let claudeToken: string | null = null;
+      let secretName: string;
+
+      if (authChoice === 0) {
+        secretName = "ANTHROPIC_API_KEY";
+        claudeToken = await prompt("Paste your API key: ");
+      } else {
+        secretName = "CLAUDE_CODE_OAUTH_TOKEN";
+        console.log("  Looking for Claude Code credentials...");
+        claudeToken = extractClaudeOAuthToken();
+        if (claudeToken) {
+          console.log("  [ok] Found OAuth token from local Claude Code installation");
+        } else {
+          console.log("  [!] Could not find credentials automatically.");
+          console.log("      Make sure you've signed in with `claude` at least once.");
+          claudeToken = await prompt("  Or paste a token manually: ");
+        }
+      }
 
       if (claudeToken) {
         try {

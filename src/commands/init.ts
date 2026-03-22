@@ -78,6 +78,52 @@ export function scaffoldFiles(repoRoot: string, options: ScaffoldOptions): Scaff
   return { created, skipped };
 }
 
+export function extractClaudeOAuthToken(): string | null {
+  const platform = process.platform;
+
+  if (platform === "darwin") {
+    // macOS: token stored in Keychain under "Claude Code-credentials"
+    try {
+      const raw = execSync(
+        'security find-generic-password -s "Claude Code-credentials" -w',
+        { encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] }
+      ).trim();
+      const data = JSON.parse(raw);
+      return data?.claudeAiOauth?.accessToken || null;
+    } catch {
+      return null;
+    }
+  }
+
+  if (platform === "linux") {
+    // Linux: token stored in ~/.claude/credentials.json or via secret-tool
+    const homedir = process.env.HOME || "";
+    const credPath = join(homedir, ".claude", "credentials.json");
+    if (existsSync(credPath)) {
+      try {
+        const data = JSON.parse(readFileSync(credPath, "utf-8"));
+        return data?.claudeAiOauth?.accessToken || null;
+      } catch {
+        return null;
+      }
+    }
+
+    // Try secret-tool (GNOME Keyring)
+    try {
+      const raw = execSync(
+        'secret-tool lookup service "Claude Code-credentials"',
+        { encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] }
+      ).trim();
+      const data = JSON.parse(raw);
+      return data?.claudeAiOauth?.accessToken || null;
+    } catch {
+      return null;
+    }
+  }
+
+  return null;
+}
+
 export async function prompt(question: string): Promise<string> {
   const rl = createInterface({ input: process.stdin, output: process.stdout });
   return new Promise((resolve) => {
