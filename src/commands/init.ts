@@ -201,18 +201,16 @@ export function gatherRepoContext(repoRoot: string): string {
   return parts.join("\n\n");
 }
 
-const POLICY_PROMPT_TEMPLATE = `Analyze this repository and generate a .github/repo-policy.md file.
-
-The policy file must have exactly these 4 top-level sections:
+const POLICY_PROMPT_TEMPLATE = `You are a technical writer. Based on the repository context below, output a markdown document with exactly these 4 sections. Output ONLY the raw markdown — no explanation, no code fences, no preamble, no summary. Start your response with "# Product Guardrails".
 
 # Product Guardrails
-What this project values. The triage agent uses these to make judgment calls about what to accept, decline, or escalate.
+What this project values. The triage agent uses these bullet points to make judgment calls about what to accept, decline, or escalate.
 
 # Risk Classification
 ## Always High Risk
-Areas that should always require human review.
+List areas that should always require human review.
 ## Always Low Risk
-Areas safe for autonomous handling.
+List areas safe for autonomous handling.
 
 # Decision Rules
 ## Bugs
@@ -225,8 +223,7 @@ How to handle PRs from outside contributors.
 # Repo-Specific Rules
 Anything unique to this project — modules to protect, naming conventions, etc.
 
-Write specific rules based on what you see in the codebase. Do not use placeholder text like "Example:" — every rule should be real and relevant to this project.
-Output ONLY the markdown content, no code fences or preamble.
+Write specific rules based on what you see in the repository context. Every rule must be real and relevant — no placeholders.
 
 --- REPOSITORY CONTEXT ---
 `;
