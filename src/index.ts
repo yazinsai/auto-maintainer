@@ -8,6 +8,7 @@ import {
   resolveClaudeActionSha,
   detectCiWorkflowName,
   extractClaudeOAuthToken,
+  generatePolicy,
   prompt,
   promptChoice,
 } from "./commands/init.js";
@@ -120,10 +121,13 @@ program
         console.log("  [!] Skipped. Set it later: gh secret set AUTO_MAINTAINER_PAT");
       }
 
-      // 9. Commit and push
+      // 9. Generate policy
+      if (result.created.includes(".github/repo-policy.md")) {
+        generatePolicy(repoRoot);
+      }
+
+      // 10. Commit and push
       console.log("\n--- Almost done ---");
-      console.log("Edit .github/repo-policy.md with your project's rules, then commit and push.");
-      console.log("Or, to get started with the defaults:");
       const commitAnswer = await prompt("Commit and push now? [Y/n]: ");
 
       if (commitAnswer.toLowerCase() !== "n") {
