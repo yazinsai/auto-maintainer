@@ -222,7 +222,14 @@ program
         }
       }
 
-      p.outro("🎉 You're all set! Open an issue to see auto-maintainer in action.");
+      p.log.success(pc.bold("You're all set! Open an issue to see auto-maintainer in action."));
+      p.log.message("");
+      p.log.message(pc.dim("  I built this because maintaining repos was eating my weekends."));
+      p.log.message(pc.dim("  I hope it makes your life easier, as it did mine!"));
+      p.log.message(pc.dim("                   — 𝓎𝒶𝓏𝒾𝓃"));
+      p.log.message("");
+      p.log.message(`  ${pc.dim("Hit a snag?")} ${pc.cyan("https://github.com/yazinsai/auto-maintainer/issues/new")}`);
+      p.outro("🎉 Happy shipping!");
     } catch (err) {
       p.cancel(`Error: ${err instanceof Error ? err.message : err}`);
       process.exit(1);
