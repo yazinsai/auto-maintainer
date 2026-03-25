@@ -17,6 +17,14 @@
 
 auto-maintainer triages issues, reviews PRs, fixes bugs, merges code, and cuts releases — autonomously. It reads a policy file you write, follows your rules, and only asks for human input when something is genuinely ambiguous or high-risk.
 
+## Quick start
+
+```bash
+npx auto-maintainer init
+```
+
+Run this inside any git repo. That's it. The CLI:
+
 <p align="center">
   <img src="assets/hero-v2.png" alt="Before: 147 issues and 38 PRs piling up across 15 pages. After: 3 items awaiting human decision, everything else handled automatically." />
 </p>
@@ -37,14 +45,6 @@ Most repo maintenance is rule-following. You probably already have rules — the
 > "Close duplicates. Ask for repro steps on bug reports. Don't merge if CI is red. Doc-only changes are low-risk. Don't touch auth without a human review."
 
 auto-maintainer lets you write those rules in a Markdown file, then handles the rest. You define what matters. It does the work.
-
-## Quick start
-
-```bash
-npx auto-maintainer init
-```
-
-Run this inside any git repo. That's it. The CLI:
 
 1. Scaffolds four workflow files and syncs labels
 2. Analyzes your codebase and **auto-generates project-specific rules** (requires Claude Code CLI; otherwise prints a prompt you can paste into any AI tool)
