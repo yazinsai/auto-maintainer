@@ -1,6 +1,19 @@
-# auto-maintainer
+<p align="center">
+  <h1 align="center">auto-maintainer</h1>
+</p>
 
-Write your repo's rules in plain Markdown. We give you the GitHub Actions to enforce them.
+<p align="center">
+  Write your repo's rules in plain Markdown. AI enforces them.
+</p>
+
+<p align="center">
+  <a href="https://www.npmjs.com/package/auto-maintainer"><img src="https://img.shields.io/npm/v/auto-maintainer?color=blue" alt="npm version" /></a>
+  <a href="https://www.npmjs.com/package/auto-maintainer"><img src="https://img.shields.io/npm/dm/auto-maintainer" alt="npm downloads" /></a>
+  <a href="https://github.com/yazinsai/auto-maintainer/blob/main/LICENSE"><img src="https://img.shields.io/github/license/yazinsai/auto-maintainer" alt="license" /></a>
+  <a href="https://github.com/yazinsai/auto-maintainer/stargazers"><img src="https://img.shields.io/github/stars/yazinsai/auto-maintainer?style=social" alt="GitHub stars" /></a>
+</p>
+
+<br />
 
 auto-maintainer triages issues, reviews PRs, fixes bugs, merges code, and cuts releases — autonomously. It reads a policy file you write, follows your rules, and only asks for human input when something is genuinely ambiguous or high-risk.
 
@@ -25,13 +38,13 @@ Most repo maintenance is rule-following. You probably already have rules — the
 
 auto-maintainer lets you write those rules in a Markdown file, then handles the rest. You define what matters. It does the work.
 
-## Get started
+## Quick start
 
 ```bash
 npx auto-maintainer init
 ```
 
-That's it. Run this inside any git repo. The CLI:
+Run this inside any git repo. That's it. The CLI:
 
 1. Scaffolds four workflow files and syncs labels
 2. Analyzes your codebase and **auto-generates project-specific rules** (requires Claude Code CLI; otherwise prints a prompt you can paste into any AI tool)
@@ -158,6 +171,10 @@ If you're on a Claude subscription, it uses your existing plan — no extra API 
 - **Actions are pinned to commit SHAs** — not mutable tags. No supply-chain risk from upstream tag changes.
 - **Adversarial defense built in** — both agents detect prompt injection and social engineering. Suspicious content gets escalated, not executed.
 
+## Contributing
+
+Found a bug or have an idea? [Open an issue](https://github.com/yazinsai/auto-maintainer/issues). PRs welcome.
+
 ## License
 
-MIT
+[MIT](LICENSE)
