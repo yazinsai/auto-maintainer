@@ -11,6 +11,7 @@
   <a href="https://www.npmjs.com/package/auto-maintainer"><img src="https://img.shields.io/npm/dm/auto-maintainer" alt="npm downloads" /></a>
   <a href="https://github.com/yazinsai/auto-maintainer/blob/main/LICENSE"><img src="https://img.shields.io/github/license/yazinsai/auto-maintainer" alt="license" /></a>
   <a href="https://github.com/yazinsai/auto-maintainer/stargazers"><img src="https://img.shields.io/github/stars/yazinsai/auto-maintainer?style=social" alt="GitHub stars" /></a>
+  <a href="https://am.whhite.com/stats/yazinsai/auto-maintainer"><img src="https://am.whhite.com/badge/yazinsai/auto-maintainer" alt="Maintained by auto-maintainer" /></a>
 </p>
 
 <br />
@@ -138,6 +139,16 @@ The bot uses 26 labels across 5 namespaces to track state. You don't need to man
 | **risk** | How dangerous the change is | `low` `medium` `high` |
 | **resolution** | How it ended | `none` `merged` `duplicate` `already-fixed` `declined` `out-of-scope` |
 | **release** | Version impact | `none` `patch` `minor` `major` |
+
+## Badge
+
+Show the world your repo is maintained by auto-maintainer:
+
+```markdown
+[![Maintained by auto-maintainer](https://am.whhite.com/badge/YOUR_USER/YOUR_REPO)](https://am.whhite.com/stats/YOUR_USER/YOUR_REPO)
+```
+
+The badge shows live PR and issue counts. Click it to see a detailed stats page for your repo.
 
 ## Setup details
 
