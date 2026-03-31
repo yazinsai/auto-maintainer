@@ -266,7 +266,31 @@ program
         p.log.success(`Updated ${pc.cyan(f)}`);
       }
 
-      p.outro(pc.green("Workflows updated! Commit and push to apply."));
+      const shouldPush = await p.confirm({
+        message: "Commit and push now?",
+        initialValue: true,
+      });
+
+      if (p.isCancel(shouldPush)) {
+        p.cancel("Setup cancelled.");
+        process.exit(0);
+      }
+
+      if (shouldPush) {
+        const pushSpinner = p.spinner();
+        pushSpinner.start("Committing and pushing");
+        try {
+          execSync(`git add ${result.updated.map(f => `"${f}"`).join(" ")}`, { cwd: repoRoot, stdio: "pipe" });
+          execSync(`git commit -m "Update auto-maintainer workflows to v${pkg.version}"`, { cwd: repoRoot, stdio: "pipe" });
+          execSync("git push", { cwd: repoRoot, stdio: "pipe" });
+          pushSpinner.stop("Committed and pushed");
+        } catch {
+          pushSpinner.error("Git push failed");
+          p.log.warn(`Commit manually: ${pc.dim("git add .github/workflows/ && git commit -m 'Update auto-maintainer' && git push")}`);
+        }
+      }
+
+      p.outro(pc.green("Done!"));
     } catch (err) {
       p.cancel(`Error: ${err instanceof Error ? err.message : err}`);
       process.exit(1);
