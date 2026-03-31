@@ -55,6 +55,22 @@ function embedPrompt(yaml: string, placeholder: string, promptContent: string): 
   return result.join("\n");
 }
 
+function renderTemplate(template: string, options: ScaffoldOptions): string {
+  let content = readFileSync(join(TEMPLATES_DIR, template), "utf-8");
+  content = content.replace(/\{\{CLAUDE_ACTION_SHA\}\}/g, options.claudeActionSha);
+  content = content.replace(/\{\{CI_WORKFLOW_NAME\}\}/g, options.ciWorkflowName);
+
+  if (template === "triage-agent.yml") {
+    const prompt = readFileSync(join(TEMPLATES_DIR, "system-prompt-triage.md"), "utf-8");
+    content = embedPrompt(content, "{{SYSTEM_PROMPT_TRIAGE}}", prompt);
+  }
+  if (template === "implement-agent.yml") {
+    const prompt = readFileSync(join(TEMPLATES_DIR, "system-prompt-implement.md"), "utf-8");
+    content = embedPrompt(content, "{{SYSTEM_PROMPT_IMPLEMENT}}", prompt);
+  }
+  return content;
+}
+
 export function scaffoldFiles(repoRoot: string, options: ScaffoldOptions): ScaffoldResult {
   const created: string[] = [];
   const skipped: string[] = [];
@@ -67,23 +83,30 @@ export function scaffoldFiles(repoRoot: string, options: ScaffoldOptions): Scaff
     }
 
     mkdirSync(dirname(destPath), { recursive: true });
-    let content = readFileSync(join(TEMPLATES_DIR, file.template), "utf-8");
-    content = content.replace(/\{\{CLAUDE_ACTION_SHA\}\}/g, options.claudeActionSha);
-    content = content.replace(/\{\{CI_WORKFLOW_NAME\}\}/g, options.ciWorkflowName);
-
-    if (file.template === "triage-agent.yml") {
-      const prompt = readFileSync(join(TEMPLATES_DIR, "system-prompt-triage.md"), "utf-8");
-      content = embedPrompt(content, "{{SYSTEM_PROMPT_TRIAGE}}", prompt);
-    }
-    if (file.template === "implement-agent.yml") {
-      const prompt = readFileSync(join(TEMPLATES_DIR, "system-prompt-implement.md"), "utf-8");
-      content = embedPrompt(content, "{{SYSTEM_PROMPT_IMPLEMENT}}", prompt);
-    }
-    writeFileSync(destPath, content);
+    writeFileSync(destPath, renderTemplate(file.template, options));
     created.push(file.dest);
   }
 
   return { created, skipped };
+}
+
+const WORKFLOW_FILES = FILES_TO_SCAFFOLD.filter(f => AUTO_MAINTAINER_WORKFLOWS.has(f.template));
+
+export interface UpdateResult {
+  updated: string[];
+}
+
+export function updateWorkflows(repoRoot: string, options: ScaffoldOptions): UpdateResult {
+  const updated: string[] = [];
+
+  for (const file of WORKFLOW_FILES) {
+    const destPath = join(repoRoot, file.dest);
+    mkdirSync(dirname(destPath), { recursive: true });
+    writeFileSync(destPath, renderTemplate(file.template, options));
+    updated.push(file.dest);
+  }
+
+  return { updated };
 }
 
 export function extractClaudeOAuthToken(): string | null {

@@ -8,6 +8,7 @@ import pc from "picocolors";
 import { syncLabels } from "./commands/labels.js";
 import {
   scaffoldFiles,
+  updateWorkflows,
   findRepoRoot,
   checkGhAvailable,
   resolveClaudeActionSha,
@@ -234,6 +235,38 @@ program
       p.log.message("");
       p.log.message(`  ${pc.dim("Hit a snag?")} ${pc.cyan("https://github.com/yazinsai/auto-maintainer/issues/new")}`);
       p.outro("🎉 Happy shipping!");
+    } catch (err) {
+      p.cancel(`Error: ${err instanceof Error ? err.message : err}`);
+      process.exit(1);
+    }
+  });
+
+program
+  .command("update")
+  .description("Update auto-maintainer workflow files to the latest version")
+  .action(async () => {
+    p.intro(pc.bgCyan(pc.black(` auto-maintainer v${pkg.version} — update `)));
+    try {
+      const repoRoot = findRepoRoot();
+      checkGhAvailable();
+
+      const actionSpinner = p.spinner();
+      actionSpinner.start("Resolving latest claude-code-action");
+      const actionSha = resolveClaudeActionSha();
+      actionSpinner.stop(`Pinned claude-code-action @ ${pc.dim(actionSha.slice(0, 7))}`);
+
+      const ciName = await detectCiWorkflowName(repoRoot);
+
+      const updateSpinner = p.spinner();
+      updateSpinner.start("Updating workflow files");
+      const result = updateWorkflows(repoRoot, { claudeActionSha: actionSha, ciWorkflowName: ciName });
+      updateSpinner.stop(`Updated ${result.updated.length} workflow files`);
+
+      for (const f of result.updated) {
+        p.log.success(`Updated ${pc.cyan(f)}`);
+      }
+
+      p.outro(pc.green("Workflows updated! Commit and push to apply."));
     } catch (err) {
       p.cancel(`Error: ${err instanceof Error ? err.message : err}`);
       process.exit(1);
