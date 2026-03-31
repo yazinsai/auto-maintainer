@@ -165,9 +165,16 @@ The `init` command handles everything: scaffolds workflows, generates your polic
 # Full setup — walks you through everything
 npx auto-maintainer init
 
+# Update workflows to the latest version (preserves your policy files)
+npx auto-maintainer update
+
 # Re-sync labels (safe to re-run anytime)
 npx auto-maintainer labels
 ```
+
+### Updating
+
+When a new version of auto-maintainer is released, run `npx auto-maintainer update` to upgrade your workflow files. This overwrites the four workflow files with the latest templates while leaving your policy files (`repo-policy.md`, `repo-policy.yml`) untouched. Commit and push after updating.
 
 ## Cost
 
