@@ -33,7 +33,9 @@ program
     p.intro(pc.bgCyan(pc.black(" auto-maintainer ")));
     const s = p.spinner();
     s.start("Syncing labels");
-    const result = syncLabels();
+    const result = syncLabels((current, total) => {
+      s.message(`Syncing labels (${current}/${total})`);
+    });
     const parts: string[] = [];
     if (result.created > 0) parts.push(`${result.created} created`);
     if (result.updated > 0) parts.push(`${result.updated} updated`);
@@ -99,7 +101,9 @@ program
       // 6. Sync labels
       const labelSpinner = p.spinner();
       labelSpinner.start("Syncing labels");
-      const labelResult = syncLabels();
+      const labelResult = syncLabels((current, total) => {
+        labelSpinner.message(`Syncing labels (${current}/${total})`);
+      });
       const labelParts: string[] = [];
       if (labelResult.created > 0) labelParts.push(`${labelResult.created} created`);
       if (labelResult.updated > 0) labelParts.push(`${labelResult.updated} updated`);

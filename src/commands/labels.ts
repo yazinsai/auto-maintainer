@@ -25,12 +25,15 @@ function getExistingLabels(): ExistingLabel[] {
   }
 }
 
-export function syncLabels(): LabelSyncResult {
+export function syncLabels(onProgress?: (current: number, total: number) => void): LabelSyncResult {
   const existing = getExistingLabels();
   const existingMap = new Map(existing.map((l) => [l.name, l]));
   const result: LabelSyncResult = { created: 0, updated: 0, upToDate: 0 };
+  const total = LABELS.length;
 
-  for (const label of LABELS) {
+  for (let i = 0; i < LABELS.length; i++) {
+    const label = LABELS[i];
+    onProgress?.(i + 1, total);
     const ex = existingMap.get(label.name);
     if (!ex) {
       execSync(

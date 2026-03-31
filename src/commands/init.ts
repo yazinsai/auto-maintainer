@@ -235,7 +235,7 @@ export function generatePolicy(repoRoot: string): boolean {
   }
 
   const s = p.spinner();
-  s.start("Analyzing repo to generate project policy");
+  s.start("Generating project policy with Claude (this may take 15–30s)");
   try {
     const context = gatherRepoContext(repoRoot);
     const fullPrompt = POLICY_PROMPT_TEMPLATE + context;
